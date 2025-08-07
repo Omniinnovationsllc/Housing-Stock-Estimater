@@ -14,7 +14,7 @@ logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %
 app = Flask(__name__, static_folder=".")
 
 # Replace with your actual Google API key
-GOOGLE_API_KEY = "AIzaSyB7N-TvYqntP8X0brWeXmHcDpOl_xN0jvg"
+GOOGLE_API_KEY = ""
 
 def get_addresses_in_bounding_box(north, east, south, west):
     """
@@ -194,3 +194,4 @@ def screenshot_addresses():
 if __name__ == "__main__":
     logging.debug("Starting Flask server on port 5000...")
     app.run(debug=True, port=5000)
+
