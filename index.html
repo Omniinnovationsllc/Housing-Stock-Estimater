@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Google Maps Area Selection with Satellite View</title>
+    <style>
+      #map {
+        width: 100%;
+        height: 80vh;
+      }
+      #addressList {
+        margin-top: 1em;
+      }
+      #buttons {
+        margin: 1em 0;
+      }
+      button {
+        margin-right: 1em;
+      }
+      img {
+        border: 1px solid #ccc;
+        margin: 0.5em 0;
+      }
+    </style>
+    <!-- Include the Google Maps JavaScript API with Drawing library -->
+    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyB7N-TvYqntP8X0brWeXmHcDpOl_xN0jvg&libraries=drawing"></script>
+  </head>
+  <body>
+    <h1>Select an Area and Get Addresses (Satellite View)</h1>
+    <div id="map"></div>
+    <div id="buttons">
+      <button id="getAddressesBtn">Get Addresses in Rectangle</button>
+    </div>
+    <div id="addressList"></div>
+    <script>
+      let map, drawingManager, selectedRectangle;
+
+      function initMap() {
+        map = new google.maps.Map(document.getElementById('map'), {
+          center: { lat: 40.7128, lng: -74.0060 },
+          zoom: 13,
+          mapTypeId: 'satellite'
+        });
+
+        drawingManager = new google.maps.drawing.DrawingManager({
+          drawingMode: google.maps.drawing.OverlayType.RECTANGLE,
+          drawingControl: true,
+          drawingControlOptions: {
+            position: google.maps.ControlPosition.TOP_CENTER,
+            drawingModes: ['rectangle']
+          },
+          rectangleOptions: {
+            fillColor: '#FF0000',
+            fillOpacity: 0.35,
+            strokeWeight: 2,
+            clickable: false,
+            editable: true,
+            zIndex: 1
+          }
+        });
+        drawingManager.setMap(map);
+
+        google.maps.event.addListener(drawingManager, 'overlaycomplete', function(event) {
+          // Remove any existing rectangle
+          if (selectedRectangle) {
+            selectedRectangle.setMap(null);
+          }
+          selectedRectangle = event.overlay;
+          // Disable drawing mode after a rectangle is drawn
+          drawingManager.setDrawingMode(null);
+        });
+      }
+
+      document.getElementById('getAddressesBtn').addEventListener('click', async function () {
+        if (!selectedRectangle) {
+          alert('Please draw a rectangle first!');
+          return;
+        }
+        const bounds = selectedRectangle.getBounds();
+        const ne = bounds.getNorthEast();
+        const sw = bounds.getSouthWest();
+        const rectangleBounds = {
+          north: ne.lat(),
+          east: ne.lng(),
+          south: sw.lat(),
+          west: sw.lng()
+        };
+
+        try {
+          // Fetch addresses within the rectangle from the Flask API
+          const response = await fetch('/api/addresses_in_area', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(rectangleBounds)
+          });
+          const data = await response.json();
+          
+          const addressListDiv = document.getElementById('addressList');
+          addressListDiv.innerHTML = '<h3>Addresses Found:</h3>';
+          data.addresses.forEach(addr => {
+            const p = document.createElement('p');
+            p.textContent = addr;
+            addressListDiv.appendChild(p);
+          });
+          
+          // Now call the screenshot endpoint with the addresses
+          const screenshotResponse = await fetch('/api/screenshot_addresses', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ addresses: data.addresses })
+          });
+          const screenshotData = await screenshotResponse.json();
+          
+          if (screenshotData.success) {
+            const screenshotDiv = document.createElement('div');
+            screenshotDiv.innerHTML = '<h3>Screenshots:</h3>';
+            screenshotData.results.forEach(result => {
+              const container = document.createElement('div');
+              if (result.screenshot) {
+                container.innerHTML = `<p>${result.address}:</p>
+                  <img src="${result.screenshot}" alt="Screenshot of ${result.address}" width="400" />`;
+              } else {
+                container.innerHTML = `<p>${result.address}: ${result.error}</p>`;
+              }
+              screenshotDiv.appendChild(container);
+            });
+            addressListDiv.appendChild(screenshotDiv);
+          } else {
+            const errDiv = document.createElement('div');
+            errDiv.innerHTML = `<p>Error taking screenshots: ${screenshotData.error}</p>`;
+            addressListDiv.appendChild(errDiv);
+          }
+        } catch (error) {
+          console.error('Error fetching addresses or screenshots:', error);
+        }
+      });
+      
+      initMap();
+    </script>
+  </body>
+</html>
